@@ -23,6 +23,8 @@
 /* USER CODE BEGIN Includes */
 #include "codec.h"
 #include "IIR_PeakingFilter.h"
+#include "fir_filter.h"
+
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
