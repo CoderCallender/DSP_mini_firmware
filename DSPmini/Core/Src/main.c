@@ -35,9 +35,9 @@
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
 #define NUM_ADC_CHANNELS 	6
-#define AUDIO_BUFFER_SIZE	64
+#define AUDIO_BUFFER_SIZE	128
 
-#define SAMPLE_RATE_HZ		46875.0f	//will change when osc is fitted to board
+#define SAMPLE_RATE_HZ		48828.0f	//will change when osc is fitted to board
 
 #define UINT16_TO_FLOAT 0.00001525878f
 #define INT16_TO_FLOAT 0.00003051757f
@@ -95,6 +95,7 @@ struct potentiometers
 IIR_peakingFilter bass_filter;
 IIR_peakingFilter mid_filter;
 IIR_peakingFilter high_filter;
+fir_filter_t anti_aliasing_filter;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -108,6 +109,7 @@ static void MX_TIM2_Init(void);
 static void MX_TIM3_Init(void);
 /* USER CODE BEGIN PFP */
 void update_filter_settings(uint16_t q_pot, uint16_t boostCut_pot, IIR_peakingFilter *filt, float centre_freq);
+float clamp(float in, float min, float max);
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -165,7 +167,19 @@ void HAL_I2SEx_TxRxCpltCallback(I2S_HandleTypeDef *hi2s)
 
 	audioDataReadyFlag = 1;
 }
+float clamp(float in, float min, float max)
+{
+	if(in > max)
+	{
+		in = max;
+	}
+	else if(in < min)
+	{
+		in = min;
+	}
 
+	return in;
+}
 void processData(void)
 {
 	static float leftIn, leftOut; //, rightIn, rightOut;
@@ -177,21 +191,15 @@ void processData(void)
 
 	//	codecOutBuff_p[n] = codecInBuff_p[n];	//debug
 		//left channel data
-		leftIn = INT16_TO_FLOAT * ((float) codecInBuff_p[n]);
-
-		if(leftIn > 1.0f)
-		{
-			leftIn -= 2.0f;	//make sure data is within 1/-1
-		}
+		//leftIn = INT16_TO_FLOAT * ((float) codecInBuff_p[n]);
+		leftIn = (float)codecInBuff_p[n];
 
 		//modify the data here
-		leftOut = IIR_peakingFilter_update(&bass_filter, leftIn);
-		leftOut = IIR_peakingFilter_update(&mid_filter, leftOut);
-		leftOut = IIR_peakingFilter_update(&high_filter, leftOut);
-		//leftOut = leftIn; //debug
+		leftOut = process_fir_filter(&anti_aliasing_filter, leftIn);
+	//	leftOut = leftIn; //debug
 
 		//convert back to signed int and transfer to DAC (via pointer)
-		codecOutBuff_p[n] =  (int16_t) (FLOAT_TO_INT16 * leftOut);
+		codecOutBuff_p[n] =  (int16_t)leftOut;
 
 		//////////////////////
 		//right channel data (not used in current hardware)
@@ -212,6 +220,7 @@ void processData(void)
 
 	audio_update_lockout_flag = 0;
 	audioDataReadyFlag = 0;
+	return;
 }
 
 /* USER CODE END 0 */
@@ -253,15 +262,16 @@ int main(void)
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
-  HAL_ADC_Start_DMA(&hadc1, (uint32_t *) adcData, NUM_ADC_CHANNELS); 	//start the ADC and link it with the DMA
-  HAL_TIM_Base_Start(&htim2); 											//start timer 2 which triggers the ADC
+ // HAL_ADC_Start_DMA(&hadc1, (uint32_t *) adcData, NUM_ADC_CHANNELS); 	//start the ADC and link it with the DMA
+ // HAL_TIM_Base_Start(&htim2); 											//start timer 2 which triggers the ADC
   HAL_I2SEx_TransmitReceive_DMA(&hi2s2, (uint16_t *) codecOutData, (uint16_t *) codecInData, AUDIO_BUFFER_SIZE);
   codec_hardware_reset_pin_clear();
   HAL_Delay(50);
   codec_configure(&hi2c1);
-  IIR_peakingFilter_init(&bass_filter, SAMPLE_RATE_HZ);		//initialise bass frequency peaking filter
-  IIR_peakingFilter_init(&mid_filter, SAMPLE_RATE_HZ);
-  IIR_peakingFilter_init(&high_filter, SAMPLE_RATE_HZ);
+ // IIR_peakingFilter_init(&bass_filter, SAMPLE_RATE_HZ);		//initialise bass frequency peaking filter
+ // IIR_peakingFilter_init(&mid_filter, SAMPLE_RATE_HZ);
+ // IIR_peakingFilter_init(&high_filter, SAMPLE_RATE_HZ);
+  init_fir_filter(&anti_aliasing_filter);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -314,8 +324,8 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.HSICalibrationValue = RCC_HSICALIBRATION_DEFAULT;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSI;
-  RCC_OscInitStruct.PLL.PLLM = 16;
-  RCC_OscInitStruct.PLL.PLLN = 192;
+  RCC_OscInitStruct.PLL.PLLM = 8;
+  RCC_OscInitStruct.PLL.PLLN = 160;
   RCC_OscInitStruct.PLL.PLLP = RCC_PLLP_DIV2;
   RCC_OscInitStruct.PLL.PLLQ = 4;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
@@ -330,9 +340,9 @@ void SystemClock_Config(void)
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
   RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV4;
-  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV8;
+  RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV2;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_3) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_5) != HAL_OK)
   {
     Error_Handler();
   }
@@ -489,7 +499,7 @@ static void MX_I2S2_Init(void)
   hi2s2.Init.Standard = I2S_STANDARD_PHILIPS;
   hi2s2.Init.DataFormat = I2S_DATAFORMAT_16B;
   hi2s2.Init.MCLKOutput = I2S_MCLKOUTPUT_ENABLE;
-  hi2s2.Init.AudioFreq = I2S_AUDIOFREQ_48K;
+  hi2s2.Init.AudioFreq = I2S_AUDIOFREQ_32K;
   hi2s2.Init.CPOL = I2S_CPOL_LOW;
   hi2s2.Init.ClockSource = I2S_CLOCK_PLL;
   hi2s2.Init.FullDuplexMode = I2S_FULLDUPLEXMODE_ENABLE;
