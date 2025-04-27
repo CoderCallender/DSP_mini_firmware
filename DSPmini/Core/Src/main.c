@@ -24,6 +24,8 @@
 #include "codec.h"
 #include "IIR_PeakingFilter.h"
 #include "fir_filter.h"
+#include "iir_filter.h"
+#include "distortion.h"
 
 /* USER CODE END Includes */
 
@@ -37,7 +39,7 @@
 #define NUM_ADC_CHANNELS 	6
 #define AUDIO_BUFFER_SIZE	128
 
-#define SAMPLE_RATE_HZ		48828.0f	//will change when osc is fitted to board
+#define SAMPLE_RATE_HZ		32552.0f	//will change when osc is fitted to board
 
 #define UINT16_TO_FLOAT 0.00001525878f
 #define INT16_TO_FLOAT 0.00003051757f
@@ -96,6 +98,9 @@ IIR_peakingFilter bass_filter;
 IIR_peakingFilter mid_filter;
 IIR_peakingFilter high_filter;
 fir_filter_t anti_aliasing_filter;
+iir_filter_t treble_cut_filter;
+iir_filter_t bass_cut_filter;
+distortion_t overdrive;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -128,9 +133,15 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 	pots.pot5 = adcData[2];
 	pots.pot6 = adcData[3];
 
-	update_filter_settings(50, pots.pot2, &bass_filter, BASS_EQ_FREQ);
-	update_filter_settings(500, pots.pot4, &mid_filter, MID_EQ_FREQ);
-	update_filter_settings(5500, pots.pot6, &high_filter, HIGH_EQ_FREQ);
+	//
+	if(!audio_update_lockout_flag)
+	{
+		iir_highpass_set_params(&bass_cut_filter, (((float)pots.pot1 / 6.82f) + 50));	//50hz to 600Hz
+		iir_lowpass_set_params(&treble_cut_filter, (((4096 - (float)pots.pot2) / 2.048f) + 3000));	//3k to 5k
+		overdrive.gain = (((float)pots.pot3 / 200) + 0.1f);
+		overdrive.asym_Q = (((float)pots.pot4 / 2048) + 0.1f) * -1.0f;
+	//	overdrive.asym_d = (((float)pots.pot5 / 409.0) + 0.1);
+	}
 }
 
 void update_filter_settings(uint16_t q_pot, uint16_t boostCut_pot, IIR_peakingFilter *filt, float centre_freq)
@@ -167,55 +178,60 @@ void HAL_I2SEx_TxRxCpltCallback(I2S_HandleTypeDef *hi2s)
 
 	audioDataReadyFlag = 1;
 }
-float clamp(float in, float min, float max)
-{
-	if(in > max)
-	{
-		in = max;
-	}
-	else if(in < min)
-	{
-		in = min;
-	}
 
-	return in;
-}
 void processData(void)
 {
-	static float leftIn, leftOut; //, rightIn, rightOut;
+	float leftIn, leftOut, outTemp_1, outTemp_2, outTemp_3; //, rightIn, rightOut;
 
 	audio_update_lockout_flag = 1;
 
 	for(uint8_t n = 0; n < (AUDIO_BUFFER_SIZE/2) - 1; n += 2)
 	{
 
-	//	codecOutBuff_p[n] = codecInBuff_p[n];	//debug
-		//left channel data
-		//leftIn = INT16_TO_FLOAT * ((float) codecInBuff_p[n]);
-		leftIn = (float)codecInBuff_p[n];
-
-		//modify the data here
-		leftOut = process_fir_filter(&anti_aliasing_filter, leftIn);
-	//	leftOut = leftIn; //debug
-
-		//convert back to signed int and transfer to DAC (via pointer)
-		codecOutBuff_p[n] =  (int16_t)leftOut;
-
-		//////////////////////
-		//right channel data (not used in current hardware)
-	/*	rightIn = (float)codecInBuff_p[n+1];
-
-		if(rightIn > 1.0f)
-		{
-			rightIn -= 2.0f;	//make sure data is within 1/-1
+		// Check if number is negative (sign bit)
+		if (codecInBuff_p[n] & 0x8000) {
+			codecInBuff_p[n] |= ~0xFFFF;
 		}
 
+		//left channel data, normalise to float -1.0 to +1.0
+		leftIn = (float)codecInBuff_p[n] / (float)0x7FFF;
+
+
 		//modify the data here
-		rightOut = rightIn;
+		//high pass IIR
+		outTemp_1 = iir_filter_update(&bass_cut_filter, leftIn);
+		//anti alias (low pass)
+		outTemp_2 = process_fir_filter(&anti_aliasing_filter, outTemp_1);
+		//distortion
+		if(HAL_GPIO_ReadPin(SWITCH_1_GPIO_Port, SWITCH_1_Pin))
+		{
+			HAL_GPIO_WritePin(GPIOC, GPIO_PIN_10, 0);	//Blue
+			HAL_GPIO_WritePin(GPIOC, GPIO_PIN_11, 1); //RED
+			outTemp_3 = distortion(&overdrive, outTemp_2);
+		}
+		else
+		{
+			HAL_GPIO_WritePin(GPIOC, GPIO_PIN_10, 1);	//Blue
+			HAL_GPIO_WritePin(GPIOC, GPIO_PIN_11, 0);		//RED
+			outTemp_3 = asym_distortion(&overdrive, outTemp_2);
+		}
+
+		//low pass IIR
+		leftOut = iir_filter_update(&treble_cut_filter, outTemp_3);
+
+		//volume
+		leftOut = leftOut * ((float)pots.pot6 / 4096);
+
+		// Ensure output samples are within [-1.0,+1.0] range
+		if (leftOut < -1.0f) {
+			leftOut = -1.0f;
+		} else if (leftOut > 1.0f) {
+			leftOut =  1.0f;
+		}
 
 		//convert back to signed int and transfer to DAC (via pointer)
-		codecOutBuff_p[n] = (int16_t) rightOut;
-*/
+		codecOutBuff_p[n] =  (int16_t)(leftOut * 0x7FFF);
+
 	}
 
 	audio_update_lockout_flag = 0;
@@ -262,16 +278,20 @@ int main(void)
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
- // HAL_ADC_Start_DMA(&hadc1, (uint32_t *) adcData, NUM_ADC_CHANNELS); 	//start the ADC and link it with the DMA
- // HAL_TIM_Base_Start(&htim2); 											//start timer 2 which triggers the ADC
+  HAL_ADC_Start_DMA(&hadc1, (uint32_t *) adcData, NUM_ADC_CHANNELS); 	//start the ADC and link it with the DMA
+  HAL_TIM_Base_Start(&htim2); 											//start timer 2 which triggers the ADC
   HAL_I2SEx_TransmitReceive_DMA(&hi2s2, (uint16_t *) codecOutData, (uint16_t *) codecInData, AUDIO_BUFFER_SIZE);
   codec_hardware_reset_pin_clear();
   HAL_Delay(50);
   codec_configure(&hi2c1);
- // IIR_peakingFilter_init(&bass_filter, SAMPLE_RATE_HZ);		//initialise bass frequency peaking filter
- // IIR_peakingFilter_init(&mid_filter, SAMPLE_RATE_HZ);
- // IIR_peakingFilter_init(&high_filter, SAMPLE_RATE_HZ);
+
   init_fir_filter(&anti_aliasing_filter);
+  iir_filter_init(&treble_cut_filter, SAMPLE_RATE_HZ);
+  iir_filter_init(&bass_cut_filter, SAMPLE_RATE_HZ);
+  iir_lowpass_set_params(&treble_cut_filter, 4000.f);
+  iir_highpass_set_params(&bass_cut_filter, 2000.f);
+  innit_distortion(&overdrive);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
