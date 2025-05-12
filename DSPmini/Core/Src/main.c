@@ -298,9 +298,19 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  if(audioDataReadyFlag)
+	  if(HAL_GPIO_ReadPin(SWITCH_0_GPIO_Port, SWITCH_0_Pin))
 	  {
-		  processData();
+		  if(audioDataReadyFlag)
+		  {
+			  processData();
+		  }
+	  }
+
+	  else
+	  {
+		  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_10, 0);	//Blue
+		  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_11, 0);	//Red
+		  HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, 0);
 	  }
 /*	  if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_4))		//switch 0
 	  {
