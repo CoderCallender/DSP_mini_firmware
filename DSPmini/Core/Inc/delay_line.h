@@ -1,10 +1,10 @@
-#ifndef IFX_DELAYLINE_H
-#define IFX_DELAYLINE_H
+#ifndef DELAYLINE_H
+#define DELAYLINE_H
 
 #include <stdint.h>
 
 // Pre-defined maximum delay line length
-#define IFX_DELAYLINE_MAXLENGTH 32500
+#define DELAYLINE_MAXLENGTH 32500/2	//500ms - can cause RAM overflow if too high
 
 typedef struct {
 
@@ -13,12 +13,12 @@ typedef struct {
 
 	// Delay line circular buffer
 	uint32_t index;
-	float memory[IFX_DELAYLINE_MAXLENGTH];
+	float memory[DELAYLINE_MAXLENGTH];
 
-} IFX_DelayLine;
+} delayline_t;
 
-void   IFX_DelayLine_Init(IFX_DelayLine *dlyLn, float delayTime_ms, float sampleRate_Hz);
-float  IFX_DelayLine_Update(IFX_DelayLine *dlyLn, float inp);
-void   IFX_DelayLine_SetLength(IFX_DelayLine *dlyLn, float delayTime_ms, float sampleRate_Hz);
+void   DelayLine_Init(delayline_t *dlyLn, float delayTime_ms, float sampleRate_Hz);
+float  DelayLine_Update(delayline_t *dlyLn, float inp);
+void   DelayLine_SetLength(delayline_t *dlyLn, float delayTime_ms, float sampleRate_Hz);
 
 #endif

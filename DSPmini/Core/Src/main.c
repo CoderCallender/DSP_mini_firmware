@@ -26,6 +26,7 @@
 #include "fir_filter.h"
 #include "iir_filter.h"
 #include "distortion.h"
+#include "delay_line.h"
 
 /* USER CODE END Includes */
 
@@ -39,7 +40,7 @@
 #define NUM_ADC_CHANNELS 	6
 #define AUDIO_BUFFER_SIZE	128
 
-#define SAMPLE_RATE_HZ		32552.0f	//will change when osc is fitted to board
+#define SAMPLE_RATE_HZ		32552.0f	//
 
 #define UINT16_TO_FLOAT 0.00001525878f
 #define INT16_TO_FLOAT 0.00003051757f
@@ -48,6 +49,12 @@
 #define BASS_EQ_FREQ	150.0f
 #define MID_EQ_FREQ		1000.0f
 #define HIGH_EQ_FREQ	6000.0f
+
+#define DELAY_TIME_MS	500.0f
+#define DELAY_ALPHA		0.6f
+#define DELAY_BETA		0.4f
+#define DELAY_FEEDBACK	0.8f
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
@@ -101,6 +108,7 @@ fir_filter_t anti_aliasing_filter;
 iir_filter_t treble_cut_filter;
 iir_filter_t bass_cut_filter;
 distortion_t overdrive;
+delayline_t delay;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -181,7 +189,8 @@ void HAL_I2SEx_TxRxCpltCallback(I2S_HandleTypeDef *hi2s)
 
 void processData(void)
 {
-	float leftIn, leftOut, outTemp_1, outTemp_2, outTemp_3; //, rightIn, rightOut;
+	float leftIn, leftOut, outTemp_1, outTemp_2, outTemp_3;
+	static float static_temp;
 
 	audio_update_lockout_flag = 1;
 
@@ -213,12 +222,14 @@ void processData(void)
 		{
 			HAL_GPIO_WritePin(GPIOC, GPIO_PIN_10, 1);	//Blue
 			HAL_GPIO_WritePin(GPIOC, GPIO_PIN_11, 0);		//RED
-			outTemp_3 = asym_distortion(&overdrive, outTemp_2);
+			//outTemp_3 = asym_distortion(&overdrive, outTemp_2);
+			outTemp_3 = DELAY_ALPHA * outTemp_2 + DELAY_BETA * DelayLine_Update(&delay, (outTemp_2 + (0.8 * static_temp)));
+
 		}
 
 		//low pass IIR
 		leftOut = iir_filter_update(&treble_cut_filter, outTemp_3);
-
+		static_temp = leftOut; //save
 		//volume
 		leftOut = leftOut * ((float)pots.pot6 / 4096);
 
@@ -291,14 +302,14 @@ int main(void)
   iir_lowpass_set_params(&treble_cut_filter, 4000.f);
   iir_highpass_set_params(&bass_cut_filter, 2000.f);
   innit_distortion(&overdrive);
-
+  DelayLine_Init(&delay, DELAY_TIME_MS, SAMPLE_RATE_HZ);
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  if(HAL_GPIO_ReadPin(SWITCH_0_GPIO_Port, SWITCH_0_Pin))
+	  if(!HAL_GPIO_ReadPin(SWITCH_0_GPIO_Port, SWITCH_0_Pin))
 	  {
 		  if(audioDataReadyFlag)
 		  {

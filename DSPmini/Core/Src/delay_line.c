@@ -1,21 +1,21 @@
-#include "IFX_DelayLine.h"
+#include "delay_line.h"
 
-void IFX_DelayLine_Init(IFX_DelayLine *dlyLn, float delayTime_ms, float sampleRate_Hz) {
+void DelayLine_Init(delayline_t *dlyLn, float delayTime_ms, float sampleRate_Hz) {
 
     // Set delay line length
-    IFX_DelayLine_SetLength(dlyLn, delayTime_ms, sampleRate_Hz);
+    DelayLine_SetLength(dlyLn, delayTime_ms, sampleRate_Hz);
 
 
     // Clear delay line circular buffer, reset index
     dlyLn->index = 0;
 
-    for (uint32_t n = 0; n < IFX_DELAYLINE_MAXLENGTH; n++) {
+    for (uint32_t n = 0; n < DELAYLINE_MAXLENGTH; n++) {
         dlyLn->memory[n] = 0.0f;
     }
 
 }
 
-float IFX_DelayLine_Update(IFX_DelayLine *dlyLn, float inp) {
+float DelayLine_Update(delayline_t *dlyLn, float inp) {
 
 	// Get current delay line output
 	float out = dlyLn->memory[dlyLn->index];
@@ -36,13 +36,13 @@ float IFX_DelayLine_Update(IFX_DelayLine *dlyLn, float inp) {
 
 }
 
-void IFX_DelayLine_SetLength(IFX_DelayLine *dlyLn, float delayTime_ms, float sampleRate_Hz) {
+void DelayLine_SetLength(delayline_t *dlyLn, float delayTime_ms, float sampleRate_Hz) {
 
     dlyLn->length = (uint32_t) (0.001f * delayTime_ms * sampleRate_Hz);
 
-    if (dlyLn->length > IFX_DELAYLINE_MAXLENGTH) {
+    if (dlyLn->length > DELAYLINE_MAXLENGTH) {
 
-        dlyLn->length = IFX_DELAYLINE_MAXLENGTH;
+        dlyLn->length = DELAYLINE_MAXLENGTH;
 
     }
 
