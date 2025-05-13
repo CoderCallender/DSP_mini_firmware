@@ -298,7 +298,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  if(HAL_GPIO_ReadPin(SWITCH_0_GPIO_Port, SWITCH_0_Pin))
+	  if(!HAL_GPIO_ReadPin(SWITCH_0_GPIO_Port, SWITCH_0_Pin))
 	  {
 		  if(audioDataReadyFlag)
 		  {
