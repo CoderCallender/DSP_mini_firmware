@@ -13,6 +13,15 @@ typedef struct {
 
 	// Delay line circular buffer
 	uint32_t index;
+
+	//delay time
+	float delay_time_ms;
+
+	//delay mix
+	float mix;
+
+	//delay feedback
+	float feedback;
 	float memory[DELAYLINE_MAXLENGTH];
 
 } delayline_t;

@@ -144,11 +144,17 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 	//
 	if(!audio_update_lockout_flag)
 	{
-		iir_highpass_set_params(&bass_cut_filter, (((float)pots.pot1 / 6.82f) + 50));	//50hz to 600Hz
-		iir_lowpass_set_params(&treble_cut_filter, (((4096 - (float)pots.pot2) / 2.048f) + 3000));	//3k to 5k
-		overdrive.gain = (((float)pots.pot3 / 200) + 0.1f);
-		overdrive.asym_Q = (((float)pots.pot4 / 2048) + 0.1f) * -1.0f;
+	//	iir_highpass_set_params(&bass_cut_filter, (((float)pots.pot1 / 6.82f) + 50));	//50hz to 600Hz
+	//	iir_lowpass_set_params(&treble_cut_filter, (((4096 - (float)pots.pot2) / 2.048f) + 3000));	//3k to 5k
+	//	overdrive.gain = (((float)pots.pot3 / 200) + 0.1f);
+	//	overdrive.asym_Q = (((float)pots.pot4 / 2048) + 0.1f) * -1.0f;
 	//	overdrive.asym_d = (((float)pots.pot5 / 409.0) + 0.1);
+
+	//	DelayLine_SetLength(&delay, ((float)pots.pot1 / 8) + 10.0f, SAMPLE_RATE_HZ);	//sets between 0 and 512ms
+
+		delay.mix = (float)pots.pot2 / 4096;
+		delay.feedback = ((float)pots.pot3 / 4500); //(never let it go full feedback)
+
 	}
 }
 
@@ -189,8 +195,8 @@ void HAL_I2SEx_TxRxCpltCallback(I2S_HandleTypeDef *hi2s)
 
 void processData(void)
 {
-	float leftIn, leftOut, outTemp_1, outTemp_2, outTemp_3;
-	static float static_temp;
+	float leftIn, processed_data, current_delay_data;
+	static float leftOut;
 
 	audio_update_lockout_flag = 1;
 
@@ -208,11 +214,11 @@ void processData(void)
 
 		//modify the data here
 		//high pass IIR
-		outTemp_1 = iir_filter_update(&bass_cut_filter, leftIn);
+	//	outTemp_1 = iir_filter_update(&bass_cut_filter, leftIn);
 		//anti alias (low pass)
-		outTemp_2 = process_fir_filter(&anti_aliasing_filter, outTemp_1);
+		processed_data = process_fir_filter(&anti_aliasing_filter, leftIn);
 		//distortion
-		if(HAL_GPIO_ReadPin(SWITCH_1_GPIO_Port, SWITCH_1_Pin))
+/*		if(HAL_GPIO_ReadPin(SWITCH_1_GPIO_Port, SWITCH_1_Pin))
 		{
 			HAL_GPIO_WritePin(GPIOC, GPIO_PIN_10, 0);	//Blue
 			HAL_GPIO_WritePin(GPIOC, GPIO_PIN_11, 1); //RED
@@ -226,10 +232,20 @@ void processData(void)
 			outTemp_3 = DELAY_ALPHA * outTemp_2 + DELAY_BETA * DelayLine_Update(&delay, (outTemp_2 + (0.8 * static_temp)));
 
 		}
+*/
+		//get the current delay sample
+		current_delay_data = delay.memory[delay.index];
 
+		//mix it with input (acts as our feedback line)
+		leftOut = processed_data + (delay.feedback * current_delay_data);
+
+		//update the delay line and output data
+		leftOut = processed_data + (delay.mix * DelayLine_Update(&delay, leftOut));
+
+		//leftOut = processed_data + delay.mix * DelayLine_Update(&delay, (processed_data + (delay.feedback * leftOut)));
 		//low pass IIR
-		leftOut = iir_filter_update(&treble_cut_filter, outTemp_3);
-		static_temp = leftOut; //save
+	//	leftOut = iir_filter_update(&treble_cut_filter, outTemp_3);
+	//	static_temp = leftOut; //save
 		//volume
 		leftOut = leftOut * ((float)pots.pot6 / 4096);
 
@@ -289,6 +305,8 @@ int main(void)
   MX_TIM3_Init();
   /* USER CODE BEGIN 2 */
 
+ // codec_hardware_reset_pin_set();	//hold CODEC in reset
+ // HAL_Delay(1500);	//wait for horrible noises of power up to go away
   HAL_ADC_Start_DMA(&hadc1, (uint32_t *) adcData, NUM_ADC_CHANNELS); 	//start the ADC and link it with the DMA
   HAL_TIM_Base_Start(&htim2); 											//start timer 2 which triggers the ADC
   HAL_I2SEx_TransmitReceive_DMA(&hi2s2, (uint16_t *) codecOutData, (uint16_t *) codecInData, AUDIO_BUFFER_SIZE);
@@ -297,12 +315,8 @@ int main(void)
   codec_configure(&hi2c1);
 
   init_fir_filter(&anti_aliasing_filter);
-  iir_filter_init(&treble_cut_filter, SAMPLE_RATE_HZ);
-  iir_filter_init(&bass_cut_filter, SAMPLE_RATE_HZ);
-  iir_lowpass_set_params(&treble_cut_filter, 4000.f);
-  iir_highpass_set_params(&bass_cut_filter, 2000.f);
-  innit_distortion(&overdrive);
   DelayLine_Init(&delay, DELAY_TIME_MS, SAMPLE_RATE_HZ);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -311,6 +325,9 @@ int main(void)
   {
 	  if(!HAL_GPIO_ReadPin(SWITCH_0_GPIO_Port, SWITCH_0_Pin))
 	  {
+		  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_10, 1);	//Blue
+		  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_11, 1);		//RED
+
 		  if(audioDataReadyFlag)
 		  {
 			  processData();
@@ -323,19 +340,7 @@ int main(void)
 		  HAL_GPIO_WritePin(GPIOC, GPIO_PIN_11, 0);	//Red
 		  HAL_GPIO_WritePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin, 0);
 	  }
-/*	  if(HAL_GPIO_ReadPin(GPIOC, GPIO_PIN_4))		//switch 0
-	  {
-		  HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_10);	//Blue
-		  HAL_GPIO_TogglePin(GPIOC, GPIO_PIN_11);	//Red
-		  HAL_Delay(500);
-	  }
 
-	  if(HAL_GPIO_ReadPin(SWITCH_1_GPIO_Port, SWITCH_1_Pin))
-	  {
-		  HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin);
-		  HAL_Delay(500);
-	  }
-*/
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
