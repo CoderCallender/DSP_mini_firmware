@@ -4,7 +4,8 @@
 #include <stdint.h>
 
 // Pre-defined maximum delay line length
-#define DELAYLINE_MAXLENGTH 32500/2	//500ms - can cause RAM overflow if too high
+#define DELAYLINE_MAXLENGTH 32500/4	//500ms - can cause RAM overflow if too high
+
 
 typedef struct {
 
@@ -22,7 +23,17 @@ typedef struct {
 
 	//delay feedback
 	float feedback;
-	float memory[DELAYLINE_MAXLENGTH];
+	//float memory[DELAYLINE_MAXLENGTH];
+	//float memory2[DELAYLINE_MAXLENGTH/2];
+
+	//these must be pointers as the arrays are very large, meaning the memory has
+	//to be carefully allocated with the __attribute__ macros
+	float *memory_bank_one;
+	float *memory_bank_two;	//ccmram
+
+
+
+
 
 } delayline_t;
 

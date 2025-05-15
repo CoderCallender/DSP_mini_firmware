@@ -12,7 +12,7 @@
 
 
 
-#define FIR_TOTAL_TAPS 		41
+#define FIR_TOTAL_TAPS 		47
 //#define FIR_TOTAL_TAPS 		31
 
 typedef struct {

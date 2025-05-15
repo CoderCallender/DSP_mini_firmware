@@ -88,6 +88,7 @@ static int16_t codecOutData[AUDIO_BUFFER_SIZE];
 volatile uint8_t audioDataReadyFlag = 0;
 volatile uint8_t audio_update_lockout_flag = 0;
 
+
 static volatile int16_t *codecInBuff_p;	//pointers to help handle the double buffering (read half and process the other half at the same time) of the CODEC data
 static volatile int16_t *codecOutBuff_p;
 //structure to hold all the ADC values from the pots
@@ -234,7 +235,7 @@ void processData(void)
 		}
 */
 		//get the current delay sample
-		current_delay_data = delay.memory[delay.index];
+		current_delay_data = *(delay.memory_bank_two + delay.index);
 
 		//mix it with input (acts as our feedback line)
 		leftOut = processed_data + (delay.feedback * current_delay_data);
@@ -317,6 +318,11 @@ int main(void)
   init_fir_filter(&anti_aliasing_filter);
   DelayLine_Init(&delay, DELAY_TIME_MS, SAMPLE_RATE_HZ);
 
+/*  for(uint8_t x = 0; x <= BIG_NUMBER; x++)
+  {
+	  memory_in_ccm_ram[x] = 0;
+  }
+*/
   /* USER CODE END 2 */
 
   /* Infinite loop */
