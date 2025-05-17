@@ -71,7 +71,23 @@ void Error_Handler(void);
 #define LED_GREEN_GPIO_Port GPIOC
 
 /* USER CODE BEGIN Private defines */
+#define NUM_ADC_CHANNELS 	6
+#define AUDIO_BUFFER_SIZE	128
 
+#define SAMPLE_RATE_HZ		32552.0f	//
+
+#define UINT16_TO_FLOAT 0.00001525878f
+#define INT16_TO_FLOAT 0.00003051757f
+#define FLOAT_TO_INT16 32768.0f
+
+#define BASS_EQ_FREQ	150.0f
+#define MID_EQ_FREQ		1000.0f
+#define HIGH_EQ_FREQ	6000.0f
+
+#define DELAY_TIME_MS	500.0f
+#define DELAY_ALPHA		0.6f
+#define DELAY_BETA		0.4f
+#define DELAY_FEEDBACK	0.8f
 /* USER CODE END Private defines */
 
 #ifdef __cplusplus

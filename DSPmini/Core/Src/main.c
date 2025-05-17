@@ -37,23 +37,7 @@
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-#define NUM_ADC_CHANNELS 	6
-#define AUDIO_BUFFER_SIZE	128
 
-#define SAMPLE_RATE_HZ		32552.0f	//
-
-#define UINT16_TO_FLOAT 0.00001525878f
-#define INT16_TO_FLOAT 0.00003051757f
-#define FLOAT_TO_INT16 32768.0f
-
-#define BASS_EQ_FREQ	150.0f
-#define MID_EQ_FREQ		1000.0f
-#define HIGH_EQ_FREQ	6000.0f
-
-#define DELAY_TIME_MS	500.0f
-#define DELAY_ALPHA		0.6f
-#define DELAY_BETA		0.4f
-#define DELAY_FEEDBACK	0.8f
 
 /* USER CODE END PD */
 
@@ -153,6 +137,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 
 	//	DelayLine_SetLength(&delay, ((float)pots.pot1 / 8) + 10.0f, SAMPLE_RATE_HZ);	//sets between 0 and 512ms
 
+		delay.delay_time_pot_value = ((float)pots.pot1 / 8);
 		delay.mix = (float)pots.pot2 / 4096;
 		delay.feedback = ((float)pots.pot3 / 4500); //(never let it go full feedback)
 
@@ -235,7 +220,7 @@ void processData(void)
 		}
 */
 		//get the current delay sample
-		current_delay_data = *(delay.memory_bank_two + delay.index);
+		current_delay_data = *(delay.memory_bank_one + delay.index);
 
 		//mix it with input (acts as our feedback line)
 		leftOut = processed_data + (delay.feedback * current_delay_data);
