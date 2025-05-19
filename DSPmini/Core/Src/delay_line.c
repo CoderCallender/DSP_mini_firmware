@@ -45,7 +45,7 @@ float DelayLine_Update(delayline_t *dlyLn, float inp) {
 
     // Store current input in delay line circular buffer
 	*(dlyLn->memory_bank_one + dlyLn->index) = inp;
-	*(dlyLn->memory_bank_two + dlyLn->index) = 0.0f;	//clear the backup buffer as we go
+
 
 
 
@@ -55,8 +55,10 @@ float DelayLine_Update(delayline_t *dlyLn, float inp) {
 		static uint8_t old_switch = 0;
 
 		case STATE_RUN:
+
+			*(dlyLn->memory_bank_two + dlyLn->index) = 0.0f;
 			//output is simply the current sample in buffer, so do nothing but check pot value
-			if(abs(dlyLn->delay_time_pot_value - dlyLn->old_delay_time_pot_value) >= 50)
+			if(abs(dlyLn->delay_time_pot_value - dlyLn->old_delay_time_pot_value) >= 10)
 			//if(HAL_GPIO_ReadPin(SWITCH_1_GPIO_Port, SWITCH_1_Pin) != old_switch)
 			{
 			    dlyLn->length = (uint32_t) (0.001f * dlyLn->delay_time_pot_value * SAMPLE_RATE_HZ);
@@ -107,7 +109,7 @@ float DelayLine_Update(delayline_t *dlyLn, float inp) {
 			    	*(dlyLn->memory_bank_two + n) = 0.0f;
 			    }
 			    */
-			    HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin);
+
 				dlyLn->delay_state = STATE_RUN;
 			}
 
@@ -124,7 +126,7 @@ float DelayLine_Update(delayline_t *dlyLn, float inp) {
     if (dlyLn->index >= dlyLn->length) {
 
         dlyLn->index = 0;
-
+        HAL_GPIO_TogglePin(LED_GREEN_GPIO_Port, LED_GREEN_Pin);
 
     }
 
