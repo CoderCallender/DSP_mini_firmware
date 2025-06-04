@@ -26,6 +26,7 @@
 #include "fir_filter.h"
 #include "iir_filter.h"
 #include "distortion.h"
+#include "tremolo.h"
 
 /* USER CODE END Includes */
 
@@ -94,13 +95,14 @@ struct potentiometers
 	uint16_t pot6;
 }pots;
 
-IIR_peakingFilter bass_filter;
-IIR_peakingFilter mid_filter;
-IIR_peakingFilter high_filter;
-fir_filter_t anti_aliasing_filter;
-iir_filter_t treble_cut_filter;
-iir_filter_t bass_cut_filter;
-distortion_t overdrive;
+//IIR_peakingFilter bass_filter;
+//IIR_peakingFilter mid_filter;
+//IIR_peakingFilter high_filter;
+//fir_filter_t anti_aliasing_filter;
+//iir_filter_t treble_cut_filter;
+//iir_filter_t bass_cut_filter;
+//distortion_t overdrive;
+tremolo_t tremolo;
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -136,10 +138,12 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 	//
 	if(!audio_update_lockout_flag)
 	{
-		iir_highpass_set_params(&bass_cut_filter, (((float)pots.pot1 / 6.82f) + 50));	//50hz to 600Hz
-		iir_lowpass_set_params(&treble_cut_filter, (((4096 - (float)pots.pot2) / 2.048f) + 3000));	//3k to 5k
-		overdrive.gain = (((float)pots.pot3 / 200) + 0.1f);
-		overdrive.asym_Q = (((float)pots.pot4 / 2048) + 0.1f) * -1.0f;
+		update_tremolo_rate(&tremolo, ((float)pots.pot1 / 409.6f) + 0.5f);
+		update_tremolo_depth(&tremolo, ((float)pots.pot2 / 8192.0f));
+	//	iir_highpass_set_params(&bass_cut_filter, (((float)pots.pot1 / 6.82f) + 50));	//50hz to 600Hz
+	//	iir_lowpass_set_params(&treble_cut_filter, (((4096 - (float)pots.pot2) / 2.048f) + 3000));	//3k to 5k
+	//	overdrive.gain = (((float)pots.pot3 / 200) + 0.1f);
+	//	overdrive.asym_Q = (((float)pots.pot4 / 2048) + 0.1f) * -1.0f;
 	//	overdrive.asym_d = (((float)pots.pot5 / 409.0) + 0.1);
 	}
 }
@@ -199,25 +203,27 @@ void processData(void)
 
 		//modify the data here
 		//high pass IIR
-		outTemp_1 = iir_filter_update(&bass_cut_filter, leftIn);
+	//	outTemp_1 = iir_filter_update(&bass_cut_filter, leftIn);
 		//anti alias (low pass)
-		outTemp_2 = process_fir_filter(&anti_aliasing_filter, outTemp_1);
+	//	outTemp_2 = process_fir_filter(&anti_aliasing_filter, outTemp_1);
 		//distortion
 		if(HAL_GPIO_ReadPin(SWITCH_1_GPIO_Port, SWITCH_1_Pin))
 		{
 			HAL_GPIO_WritePin(GPIOC, GPIO_PIN_10, 0);	//Blue
 			HAL_GPIO_WritePin(GPIOC, GPIO_PIN_11, 1); //RED
-			outTemp_3 = distortion(&overdrive, outTemp_2);
+			leftOut = process_tremolo_effect(&tremolo, leftIn, true);
+	//		outTemp_3 = distortion(&overdrive, outTemp_2);
 		}
 		else
 		{
 			HAL_GPIO_WritePin(GPIOC, GPIO_PIN_10, 1);	//Blue
 			HAL_GPIO_WritePin(GPIOC, GPIO_PIN_11, 0);		//RED
-			outTemp_3 = asym_distortion(&overdrive, outTemp_2);
+			leftOut = process_tremolo_effect(&tremolo, leftIn, false);
+		//	outTemp_3 = asym_distortion(&overdrive, outTemp_2);
 		}
 
 		//low pass IIR
-		leftOut = iir_filter_update(&treble_cut_filter, outTemp_3);
+	//	leftOut = iir_filter_update(&treble_cut_filter, outTemp_3);
 
 		//volume
 		leftOut = leftOut * ((float)pots.pot6 / 4096);
@@ -285,12 +291,13 @@ int main(void)
   HAL_Delay(50);
   codec_configure(&hi2c1);
 
-  init_fir_filter(&anti_aliasing_filter);
-  iir_filter_init(&treble_cut_filter, SAMPLE_RATE_HZ);
-  iir_filter_init(&bass_cut_filter, SAMPLE_RATE_HZ);
-  iir_lowpass_set_params(&treble_cut_filter, 4000.f);
-  iir_highpass_set_params(&bass_cut_filter, 2000.f);
-  innit_distortion(&overdrive);
+ // init_fir_filter(&anti_aliasing_filter);
+ // iir_filter_init(&treble_cut_filter, SAMPLE_RATE_HZ);
+ // iir_filter_init(&bass_cut_filter, SAMPLE_RATE_HZ);
+ // iir_lowpass_set_params(&treble_cut_filter, 4000.f);
+ // iir_highpass_set_params(&bass_cut_filter, 2000.f);
+ // innit_distortion(&overdrive);
+  init_tremolo(&tremolo, (float)SAMPLE_RATE_HZ);
 
   /* USER CODE END 2 */
 

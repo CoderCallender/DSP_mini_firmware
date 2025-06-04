@@ -1,4 +1,4 @@
-#include "IFX_DelayLine.h"
+#include "delay_line.h"
 
 void IFX_DelayLine_Init(IFX_DelayLine *dlyLn, float delayTime_ms, float sampleRate_Hz) {
 
