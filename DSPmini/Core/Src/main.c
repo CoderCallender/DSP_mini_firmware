@@ -137,7 +137,7 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 	if(!audio_update_lockout_flag)
 	{
 		iir_highpass_set_params(&bass_cut_filter, (((float)pots.pot1 / 6.82f) + 50));	//50hz to 600Hz
-		iir_lowpass_set_params(&treble_cut_filter, (((4096 - (float)pots.pot2) / 2.048f) + 3000));	//3k to 5k
+		iir_lowpass_set_params(&treble_cut_filter, (((4096 - (float)pots.pot2) / 2.048f) + 3000));	//3k to 5k TODO: why 4096 - x ?
 		overdrive.gain = (((float)pots.pot3 / 200) + 0.1f);
 		overdrive.asym_Q = (((float)pots.pot4 / 2048) + 0.1f) * -1.0f;
 	//	overdrive.asym_d = (((float)pots.pot5 / 409.0) + 0.1);
