@@ -41,6 +41,7 @@
 #define AUDIO_BUFFER_SIZE	128
 
 #define SAMPLE_RATE_HZ		32552.0f	//will change when osc is fitted to board
+//#define SAMPLE_RATE_HZ			21701.0f
 
 #define UINT16_TO_FLOAT 0.00001525878f
 #define INT16_TO_FLOAT 0.00003051757f
@@ -305,7 +306,7 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
-	  if(HAL_GPIO_ReadPin(SWITCH_0_GPIO_Port, SWITCH_0_Pin))
+	  if(!HAL_GPIO_ReadPin(SWITCH_0_GPIO_Port, SWITCH_0_Pin))
 	  {
 		  if(audioDataReadyFlag)
 		  {

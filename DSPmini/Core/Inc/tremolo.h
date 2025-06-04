@@ -40,6 +40,7 @@ typedef struct {
 	iir_filter_t low_pass;
 	iir_filter_t high_pass;
 
+	float omega;
 
 } tremolo_t;
 

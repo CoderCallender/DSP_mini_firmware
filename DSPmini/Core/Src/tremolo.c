@@ -20,7 +20,7 @@ void init_tremolo(tremolo_t *effect, float sample_rate_hz)
 	effect->sample_rate_hz = sample_rate_hz;
 	effect->sample_time_s = 1 / sample_rate_hz;
 	effect->cycle_end_point = (uint32_t)((1 / effect->rate) / (1 / effect->sample_rate_hz)); //sine wave cycle time (T) / sample time (Ts)
-
+	effect->omega = 2 * M_PI * effect->rate;
 	//initialise filters for harmonic trem function
 	iir_filter_init(&effect->low_pass, effect->sample_rate_hz);
 	iir_filter_init(&effect->high_pass, effect->sample_rate_hz);
@@ -31,6 +31,7 @@ void init_tremolo(tremolo_t *effect, float sample_rate_hz)
 void update_tremolo_rate(tremolo_t *effect, float rate)
 {
 	effect->rate = rate;
+	effect->omega = 2 * M_PI * effect->rate;
 	effect->cycle_end_point = (uint32_t)((1 / effect->rate) / (1 / effect->sample_rate_hz)); //sine wave cycle time (T) / sample time (Ts)
 }
 
@@ -41,7 +42,7 @@ void update_tremolo_depth(tremolo_t *effect, float depth)
 
 float process_tremolo_effect(tremolo_t *effect, float input, bool harmonic)
 {
-	float out, low_pass_out, high_pass_out, pan_multiplier;
+	float out, low_pass_out, high_pass_out, pan_multiplier, t;
 
 	effect->cycle_count++;
 
@@ -63,6 +64,11 @@ float process_tremolo_effect(tremolo_t *effect, float input, bool harmonic)
 
 	//	out = high_pass_out;
 		out = (low_pass_out * pan_multiplier) + (high_pass_out * (1 - pan_multiplier));
+	//	t = effect->cycle_count * effect->sample_time_s;
+		//phased tremolo
+	//	out = (((sin(effect->omega * t)) + 0.5) * low_pass_out)
+				//+ (((sin(effect->omega * t)) + 0.5) * high_pass_out) / 2;
+						//+ high_pass_out;
 	}
 
 	else
