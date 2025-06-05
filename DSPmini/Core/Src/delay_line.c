@@ -47,8 +47,6 @@ float DelayLine_Update(delayline_t *dlyLn, float inp) {
 	*(dlyLn->memory_bank_one + dlyLn->index) = inp;
 
 
-
-
     //switch case for cross fading
 	switch (dlyLn->delay_state)
 	{
@@ -134,6 +132,7 @@ float DelayLine_Update(delayline_t *dlyLn, float inp) {
     return out;
 
 }
+
 
 //soon to be obsolete code....
 void DelayLine_SetLength(delayline_t *dlyLn, float delayTime_ms, float sampleRate_Hz) {
