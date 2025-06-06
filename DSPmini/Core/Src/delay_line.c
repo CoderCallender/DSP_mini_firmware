@@ -2,7 +2,7 @@
 #include "delay_line.h"
 #include "main.h"
 
-float memory_in_ram[DELAYLINE_MAXLENGTH];
+//float memory_in_ram[DELAYLINE_MAXLENGTH];
 float memory_in_ccm_ram[DELAYLINE_MAXLENGTH] __attribute__((section (".ccmram")));
 
 void DelayLine_Init(delayline_t *dlyLn, float delayTime_ms, float sampleRate_Hz) {
@@ -14,7 +14,7 @@ void DelayLine_Init(delayline_t *dlyLn, float delayTime_ms, float sampleRate_Hz)
     // Clear delay line circular buffer, reset index
     dlyLn->index = 0;
 
-    dlyLn->memory_bank_one = &memory_in_ram;
+    dlyLn->memory_bank_one = &memory_in_ccm_ram;	//TODO temp debug
     dlyLn->memory_bank_two = &memory_in_ccm_ram;	//point mem2 at our ccm memory buffer
 
     for (uint32_t n = 0; n < DELAYLINE_MAXLENGTH; n++)
@@ -34,6 +34,7 @@ void DelayLine_Init(delayline_t *dlyLn, float delayTime_ms, float sampleRate_Hz)
     dlyLn->delay_time_pot_value = 0;
     dlyLn->old_delay_time_pot_value = 0;
 
+    //
    // dlyLn->length_flag = 0;	//debug
 
 }
@@ -54,7 +55,7 @@ float DelayLine_Update(delayline_t *dlyLn, float inp) {
 
 		case STATE_RUN:
 
-			*(dlyLn->memory_bank_two + dlyLn->index) = 0.0f;
+			//*(dlyLn->memory_bank_two + dlyLn->index) = 0.0f;
 			//output is simply the current sample in buffer, so do nothing but check pot value
 			if(abs(dlyLn->delay_time_pot_value - dlyLn->old_delay_time_pot_value) >= 10)
 			//if(HAL_GPIO_ReadPin(SWITCH_1_GPIO_Port, SWITCH_1_Pin) != old_switch)

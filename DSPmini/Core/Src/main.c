@@ -93,22 +93,39 @@ fir_filter_t anti_aliasing_filter;
 iir_filter_t treble_cut_filter;
 iir_filter_t bass_cut_filter;
 distortion_t overdrive;
-delayline_t delay;
+
+delayline_t delay1;
+delayline_t delay2;
+delayline_t delay3;
+delayline_t delay4;
 
 reverb_delayline_t reverb_one;
 reverb_delayline_t reverb_two;
 reverb_delayline_t reverb_three;
 reverb_delayline_t reverb_four;
 
-#define RVERB_ONE_MS 20
-#define RVERB_TWO_MS 35
-#define RVERB_THREE_MS 60
-#define RVERB_FOUR_MS 75
+reverb_delayline_t reverb_five;
+reverb_delayline_t reverb_six;
+reverb_delayline_t reverb_seven;
+reverb_delayline_t reverb_eight;
+
+#define RVERB_ONE_MS 	20
+#define RVERB_TWO_MS 	35
+#define RVERB_THREE_MS 	60
+#define RVERB_FOUR_MS 	75
+#define RVERB_FIVE_MS 	10
+#define RVERB_SIX_MS 	2
+#define RVERB_SEVEN_MS 	63
+#define RVERB_EIGHT_MS 	55
 
 float verb_array_one[3255];
 float verb_array_two[3255];
 float verb_array_three[3255];
 float verb_array_four[3255];
+float verb_array_five[3255];
+float verb_array_six[3255];
+float verb_array_seven[3255];
+float verb_array_eight[3255];
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -152,9 +169,9 @@ void HAL_ADC_ConvCpltCallback(ADC_HandleTypeDef *hadc)
 
 	//	DelayLine_SetLength(&delay, ((float)pots.pot1 / 8) + 10.0f, SAMPLE_RATE_HZ);	//sets between 0 and 512ms
 
-		delay.delay_time_pot_value = ((float)pots.pot1 / 8);
-		delay.mix = (float)pots.pot2 / 4096;
-		delay.feedback = ((float)pots.pot3 / 4500); //(never let it go full feedback)
+	//	delay.delay_time_pot_value = ((float)pots.pot1 / 8);
+		delay1.mix = (float)pots.pot2 / 4096;
+		delay1.feedback = ((float)pots.pot3 / 4500); //(never let it go full feedback)
 
 	}
 }
@@ -196,7 +213,7 @@ void HAL_I2SEx_TxRxCpltCallback(I2S_HandleTypeDef *hi2s)
 
 void processData(void)
 {
-	float leftIn, processed_data, current_delay_data;
+	float leftIn, processed_data, current_delay_data[4];
 	float audio_channels[4], shuffled_channels[4];
 	static float leftOut;
 
@@ -248,32 +265,52 @@ void processData(void)
 		reverb_hadamard_matrix(shuffled_channels, audio_channels);
 
 		//REPEAT
-
+/*
 		//input into 4 reverb delays
-		audio_channels[0] = reverb_delayline_update(&reverb_one, leftIn);
-		audio_channels[1] = reverb_delayline_update(&reverb_two, leftIn);
-		audio_channels[2] = reverb_delayline_update(&reverb_three, leftIn);
-		audio_channels[3] = reverb_delayline_update(&reverb_four, leftIn);
+		audio_channels[0] = reverb_delayline_update(&reverb_five, audio_channels[0]);
+		audio_channels[1] = reverb_delayline_update(&reverb_six, audio_channels[1]);
+		audio_channels[2] = reverb_delayline_update(&reverb_seven, audio_channels[2]);
+		audio_channels[3] = reverb_delayline_update(&reverb_eight, audio_channels[3]);
 
 		//output of reverb delays into shuffle
 		reverb_shuffle_inverter(audio_channels, shuffled_channels);
 
 		//output of shuffle into hadamard
 		reverb_hadamard_matrix(shuffled_channels, audio_channels);
+*/
+		//get the current delay sample
+		current_delay_data[0] = *(delay1.memory_bank_one + delay1.index);
+		current_delay_data[1] = *(delay2.memory_bank_one + delay2.index);
+		current_delay_data[2] = *(delay3.memory_bank_one + delay3.index);
+		current_delay_data[3] = *(delay4.memory_bank_one + delay4.index);
+
+		//put it through a householder matrix to scramble it
+		reverb_householder_matrix(audio_channels, shuffled_channels);
+
+		//mix it with input (acts as our feedback line)
+		//leftOut = processed_data + (delay.feedback * current_delay_data);
+		audio_channels[0] = shuffled_channels[0] + (delay1.feedback * current_delay_data[0]);
+		audio_channels[1] = shuffled_channels[1] + (delay1.feedback * current_delay_data[1]);
+		audio_channels[2] = shuffled_channels[2] + (delay1.feedback * current_delay_data[2]);
+		audio_channels[3] = shuffled_channels[3] + (delay1.feedback * current_delay_data[3]);
+
+		//update the delay line and output data
+	//	leftOut = processed_data + (delay.mix * DelayLine_Update(&delay, leftOut));
+		audio_channels[0] = audio_channels[0] + (delay1.mix * DelayLine_Update(&delay1, audio_channels[0]));
+		audio_channels[1] = audio_channels[1] + (delay1.mix * DelayLine_Update(&delay2, audio_channels[1]));
+		audio_channels[2] = audio_channels[2] + (delay1.mix * DelayLine_Update(&delay3, audio_channels[2]));
+		audio_channels[3] = audio_channels[3] + (delay1.mix * DelayLine_Update(&delay4, audio_channels[3]));
 
 		//mix into 1 channel
 
 		//mix with input
-		leftOut = (audio_channels[0] + audio_channels[1] + audio_channels[2] + audio_channels[3] + leftIn) / 5;
-		//get the current delay sample
-	//	current_delay_data = *(delay.memory_bank_one + delay.index);
+		processed_data = (audio_channels[0] + audio_channels[1] + audio_channels[2] + audio_channels[3]) / 4;
 
-		//mix it with input (acts as our feedback line)
-	//	leftOut = processed_data + (delay.feedback * current_delay_data);
 
-		//update the delay line and output data
-	//	leftOut = processed_data + (delay.mix * DelayLine_Update(&delay, leftOut));
+		//add in the current sample to the output
+		//leftOut = (leftOut + leftIn) / 2;
 
+		leftOut = processed_data;//debug
 		//leftOut = processed_data + delay.mix * DelayLine_Update(&delay, (processed_data + (delay.feedback * leftOut)));
 		//low pass IIR
 	//	leftOut = iir_filter_update(&treble_cut_filter, outTemp_3);
@@ -347,12 +384,20 @@ int main(void)
   codec_configure(&hi2c1);
 
   init_fir_filter(&anti_aliasing_filter);
-  reverb_delayLine_init(&reverb_one, RVERB_ONE_MS, SAMPLE_RATE_HZ, &verb_array_one);
-  reverb_delayLine_init(&reverb_two, RVERB_TWO_MS, SAMPLE_RATE_HZ, &verb_array_two);
-  reverb_delayLine_init(&reverb_three, RVERB_THREE_MS, SAMPLE_RATE_HZ, &verb_array_three);
-  reverb_delayLine_init(&reverb_four, RVERB_FOUR_MS, SAMPLE_RATE_HZ, &verb_array_four);
+  reverb_delayLine_init(&reverb_one, RVERB_ONE_MS, SAMPLE_RATE_HZ, verb_array_one);
+  reverb_delayLine_init(&reverb_two, RVERB_TWO_MS, SAMPLE_RATE_HZ, verb_array_two);
+  reverb_delayLine_init(&reverb_three, RVERB_THREE_MS, SAMPLE_RATE_HZ, verb_array_three);
+  reverb_delayLine_init(&reverb_four, RVERB_FOUR_MS, SAMPLE_RATE_HZ, verb_array_four);
 
-//  DelayLine_Init(&delay, DELAY_TIME_MS, SAMPLE_RATE_HZ);
+  reverb_delayLine_init(&reverb_five, RVERB_FIVE_MS, SAMPLE_RATE_HZ, verb_array_five);
+  reverb_delayLine_init(&reverb_six, RVERB_SIX_MS, SAMPLE_RATE_HZ, verb_array_six);
+  reverb_delayLine_init(&reverb_seven, RVERB_SEVEN_MS, SAMPLE_RATE_HZ, verb_array_seven);
+  reverb_delayLine_init(&reverb_eight, RVERB_EIGHT_MS, SAMPLE_RATE_HZ, verb_array_eight);
+
+  DelayLine_Init(&delay1, DELAY_TIME_MS, SAMPLE_RATE_HZ);
+  DelayLine_Init(&delay2, DELAY_TIME_MS, SAMPLE_RATE_HZ);
+  DelayLine_Init(&delay3, DELAY_TIME_MS, SAMPLE_RATE_HZ);
+  DelayLine_Init(&delay4, DELAY_TIME_MS, SAMPLE_RATE_HZ);
 
 /*  for(uint8_t x = 0; x <= BIG_NUMBER; x++)
   {

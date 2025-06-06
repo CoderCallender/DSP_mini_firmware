@@ -37,6 +37,7 @@ void reverb_delayLine_init(reverb_delayline_t *delay_line, float delayTime_ms, f
 float reverb_delayline_update(reverb_delayline_t *delay_line, float inp);
 void reverb_shuffle_inverter(float *input_array, float *output_array);
 void reverb_hadamard_matrix(float *input_array, float *output_array);
+void reverb_householder_matrix(float *input_array, float *output_array);
 
 
 #endif /* INC_REVERB_H_ */

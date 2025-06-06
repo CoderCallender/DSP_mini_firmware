@@ -9,6 +9,7 @@
 #include "reverb.h"
 
 const int hadamard_four_four[4][4] = {{1, 1, 1, 1}, {1, -1, 1, -1}, {1, 1, -1, -1}, {1, -1, -1, 1}};
+const int householder_four_four[4][4] = {{-0.9333, -0.2667, -0.4, -0.5333}, {-0.2667, 0.4667, -0.8, -1.0667}, {-0.4, -0.8, 0.2, -1.6}, {0.5333, -1.0667, -1.6, -0.7333}};
 
 void reverb_delayLine_init(reverb_delayline_t *delay_line, float delayTime_ms, float sampleRate_Hz, float *array)
 {
@@ -82,6 +83,20 @@ void reverb_hadamard_matrix(float *input_array, float *output_array)
 		for(int col = 0; col < MAX_DIFFUSER_CHANNELS; col++)
 		{
 			output_array[row] += input_array[row] * hadamard_four_four[row][col];
+		}
+	}
+
+}
+
+//householder 4x4 matrix multiplier
+void reverb_householder_matrix(float *input_array, float *output_array)
+{
+
+	for(int row = 0; row < MAX_DIFFUSER_CHANNELS; row++)
+	{
+		for(int col = 0; col < MAX_DIFFUSER_CHANNELS; col++)
+		{
+			output_array[row] += input_array[row] * householder_four_four[row][col];
 		}
 	}
 

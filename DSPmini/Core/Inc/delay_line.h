@@ -6,7 +6,7 @@
 #include "main.h"
 
 // Pre-defined maximum delay line length
-#define DELAYLINE_MAXLENGTH (uint32_t)SAMPLE_RATE_HZ / 2	//500ms - can cause RAM overflow if too high
+#define DELAYLINE_MAXLENGTH (uint32_t)SAMPLE_RATE_HZ / 4	//500ms - can cause RAM overflow if too high
 
 #define DELAY_CROSSFADE_TIME_S		0.25
 
